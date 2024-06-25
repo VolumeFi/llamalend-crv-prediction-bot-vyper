@@ -214,27 +214,28 @@ def send_reward(_daily_amount: uint256, _days: uint256):
 
 @external
 def bid(_price_prediction_val: uint256):
-    _epoch_info: EpochInfo = self.epoch_info[self.active_epoch_num]
+    _active_epoch_num: uint256 = self.active_epoch_num
+    _epoch_info: EpochInfo = self.epoch_info[_active_epoch_num]
 
     assert block.timestamp >= _epoch_info.competition_start, "Not Active 1"
     assert block.timestamp < _epoch_info.competition_end, "Not Active 2"
     assert _epoch_info.entry_cnt < MAX_ENTRY, "Entry Limited"
-    assert self.latest_bid[msg.sender] < _epoch_info.epoch_id, "Already bid"
+    assert self.latest_bid[msg.sender] < _active_epoch_num, "Already bid"
     assert _price_prediction_val > 0, "Shouldn't be zero"
 
     _epoch_info.entry_cnt = unsafe_add(_epoch_info.entry_cnt, 1)
     #Write
-    self.bid_info.append(BidInfo({
-        epoch_id: _epoch_info.epoch_id,
+    self.bid_info[_active_epoch_num].append(BidInfo({
+        # epoch_id: _active_epoch_num,
         sender: msg.sender,
         price_prediction_val: _price_prediction_val
     }))
-    self.my_info[_epoch_info.epoch_id][msg.sender] = _price_prediction_val
-    self.latest_bid[msg.sender] = _epoch_info.epoch_id
-    self.epoch_info = _epoch_info
+    self.my_info[_active_epoch_num][msg.sender] = _price_prediction_val
+    self.latest_bid[msg.sender] = _active_epoch_num
+    self.epoch_info[_active_epoch_num] = _epoch_info
 
     # Event Log
-    log Bid(_epoch_info.epoch_id, msg.sender, _price_prediction_val)
+    log Bid(_active_epoch_num, msg.sender, _price_prediction_val)
 
 @external
 def set_winner_price(_epoch_id: uint256, _price: uint256):

@@ -21,6 +21,7 @@ def Compass(accounts):
 
 @pytest.fixture(scope="session")
 def USDT(Deployer, project):
+    print(project)
     return Deployer.deploy(project.testToken, "USDT", "USDT", 6, 10000000000000)
 
 def function_signature(str):
@@ -38,8 +39,8 @@ def CompetitionArb(Deployer, project, Compass, USDT, Alice, Admin):
     contract(sender=Compass, data=payload)
 
     return contract
-    
-def test_competition_arb(Deployer, accounts, CompetitionArb, Compass, Alice, chain):
+
+def test_competition_arb(Deployer, accounts, CompetitionArb, Compass, Alice, USDT, Admin, chain):
     assert Deployer == accounts[0]
 
     assert CompetitionArb.epoch_cnt() == 0
@@ -58,24 +59,46 @@ def test_competition_arb(Deployer, accounts, CompetitionArb, Compass, Alice, cha
         USDT.approve(CompetitionArb.address, 6000000000, sender=Deployer)
         receipt = CompetitionArb.send_reward(1000000000, 6, sender=Deployer)
 
-    assert CompetitionArb.epoch_info(1).competition_start == 1716249600
-    assert CompetitionArb.epoch_info(1).competition_end == 1716336000
+    assert CompetitionArb.epoch_info(1).competition_start == 1719360000
+    assert CompetitionArb.epoch_info(1).competition_end == 1719446400
 
-    assert CompetitionArb.epoch_info(2).competition_start == 1716336000
-    assert CompetitionArb.epoch_info(2).competition_end == 1716422400
+    assert CompetitionArb.epoch_info(2).competition_start == 1719446400
+    assert CompetitionArb.epoch_info(2).competition_end == 1719532800
 
-    # func_sig = function_signature(
-    #     "set_active_epoch((uint256,uint256,uint256,uint256,uint256))")
-    # enc_abi = encode(["(uint256,uint256,uint256,uint256,uint256)"], [(1, 1716249600, 1716336000, 0, 10000000)])
-    # add_payload = encode(["bytes32"], [b'123456'])
-    # payload = func_sig + enc_abi + add_payload
-    # CompetitionArb(sender=Compass, data=payload)
+    active_epoch_num = CompetitionArb.active_epoch_num()
+    chain.pending_timestamp += 86400
+    CompetitionArb.bid(3000, sender=Alice)
+    assert CompetitionArb.epoch_info(active_epoch_num).entry_cnt == 1
+    with ape.reverts():
+        CompetitionArb.bid(4000, sender=Alice)
 
-    # assert CompetitionArb.epoch_info().epoch_id == 1
-    # assert CompetitionArb.epoch_info().competition_start == 1716249600
-    # assert CompetitionArb.epoch_info().competition_end == 1716336000
-    # assert CompetitionArb.epoch_info().entry_cnt == 0
-    # assert CompetitionArb.epoch_info().prize_amount == 10000000
+    func_sig = function_signature(
+        "set_winner_list((address,uint256)[])")
+    enc_abi = encode(["(address,uint256)[]"], [[(Deployer.address, 1000000000)]])
+    # enc_abi = encode(["(address,uint256)[]"], [[]])
+    add_payload = encode(["bytes32"], [b'123456'])
+    payload = func_sig + enc_abi + add_payload
+    with ape.reverts():
+        CompetitionArb.set_winner_list([], sender=Compass)
+    CompetitionArb(sender=Compass, data=payload)
+    assert CompetitionArb.active_epoch_num() == 2
+    assert CompetitionArb.epoch_info(2).prize_amount == 2000000000
+
+    chain.pending_timestamp += 86400
+    active_epoch_num = CompetitionArb.active_epoch_num()
+    CompetitionArb.bid(4000, sender=Alice)
+    CompetitionArb.bid(4000, sender=Deployer)
+    assert CompetitionArb.epoch_info(active_epoch_num).entry_cnt == 2
+    with ape.reverts():
+        CompetitionArb.bid(4000, sender=Alice)
+
+    assert CompetitionArb.claimable_amount(Deployer.address) == 1000000000
+
+    balance = USDT.balanceOf(CompetitionArb.address)
+    CompetitionArb.emergency_withdraw(balance, sender=Admin)
+
+    balance = USDT.balanceOf(CompetitionArb.address)
+    assert balance == 0
 # import pytest
 # from vyper import testing
 
