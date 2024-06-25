@@ -44,7 +44,9 @@ active_epoch_num: public(uint256)
 epoch_info: public(HashMap[uint256, EpochInfo])
 bid_info: public(HashMap[uint256, DynArray[BidInfo, MAX_ENTRY]])
 my_info: public(HashMap[uint256, HashMap[address, uint256]])
+latest_bid: public(HashMap[address, uint256])
 winner_info: public(HashMap[uint256, HashMap[address, uint256]])
+winner_price: public(HashMap[uint256, uint256])
 claimable_amount: public(HashMap[address, uint256])
 
 interface ERC20:
@@ -61,12 +63,15 @@ interface CreateBotFactory:
         N: uint256, 
         callbacker: address, 
         callback_args: DynArray[uint256, 5], 
+        callback_bytes: Bytes[10**4],
+        is_new_market: bool,
         leverage: uint256, 
         deleverage_percentage: uint256, 
         health_threshold: uint256, 
         expire: uint256, 
         number_trades: uint256, 
         interval: uint256,
+        controller_idx: uint256 = 0,
         delegate: address = msg.sender
     ): payable
 
@@ -85,6 +90,10 @@ event RewardSent:
 
 event SetPaloma:
     paloma: bytes32
+
+event SetWinnerPrice:
+    epoch_id: uint256
+    price: uint256
 
 event UpdateCompass:
     old_compass: address
@@ -204,6 +213,37 @@ def send_reward(_daily_amount: uint256, _days: uint256):
     self.epoch_cnt = _epoch_cnt
 
 @external
+def bid(_price_prediction_val: uint256):
+    _epoch_info: EpochInfo = self.epoch_info[self.active_epoch_num]
+
+    assert block.timestamp >= _epoch_info.competition_start, "Not Active 1"
+    assert block.timestamp < _epoch_info.competition_end, "Not Active 2"
+    assert _epoch_info.entry_cnt < MAX_ENTRY, "Entry Limited"
+    assert self.latest_bid[msg.sender] < _epoch_info.epoch_id, "Already bid"
+    assert _price_prediction_val > 0, "Shouldn't be zero"
+
+    _epoch_info.entry_cnt = unsafe_add(_epoch_info.entry_cnt, 1)
+    #Write
+    self.bid_info.append(BidInfo({
+        epoch_id: _epoch_info.epoch_id,
+        sender: msg.sender,
+        price_prediction_val: _price_prediction_val
+    }))
+    self.my_info[_epoch_info.epoch_id][msg.sender] = _price_prediction_val
+    self.latest_bid[msg.sender] = _epoch_info.epoch_id
+    self.epoch_info = _epoch_info
+
+    # Event Log
+    log Bid(_epoch_info.epoch_id, msg.sender, _price_prediction_val)
+
+@external
+def set_winner_price(_epoch_id: uint256, _price: uint256):
+    self._paloma_check()
+    self.winner_price[_epoch_id] = _price
+
+    log SetWinnerPrice(_epoch_id, _price)
+
+@external
 def set_winner_list(_winner_infos: DynArray[WinnerInfo, MAX_ENTRY]):
     self._paloma_check()
 
@@ -237,12 +277,15 @@ def create_bot(swap_infos: DynArray[SwapInfo, MAX_SIZE],
         N: uint256, 
         callbacker: address, 
         callback_args: DynArray[uint256, 5], 
+        callback_bytes: Bytes[10**4],
+        is_new_market: bool,
         leverage: uint256, 
         deleverage_percentage: uint256, 
         health_threshold: uint256, 
         expire: uint256, 
         number_trades: uint256, 
-        interval: uint256):
+        interval: uint256,
+        controller_idx: uint256 = 0):
     
     _claimable_amount: uint256 = self.claimable_amount[msg.sender]
     assert _claimable_amount > 0, "No Claimable Amount"
@@ -255,12 +298,15 @@ def create_bot(swap_infos: DynArray[SwapInfo, MAX_SIZE],
         N, 
         callbacker, 
         callback_args, 
+        callback_bytes,
+        is_new_market,
         leverage, 
         deleverage_percentage, 
         health_threshold,
         expire,
         number_trades,
         interval, 
+        controller_idx,
         msg.sender, 
         value=msg.value)
 
