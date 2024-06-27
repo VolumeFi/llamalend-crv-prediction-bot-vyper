@@ -2,7 +2,7 @@ from ape import accounts, project, networks
 
 def main():
     with networks.parse_network_choice("arbitrum:mainnet:alchemy") as provider:
-        acct = accounts.load("deployer_account")
+        acct = accounts.load("Deployer")
         print(acct.address, acct.balance)
         compass = "0x2E68518cC9351843d11B3F41c08a63cd5B72Eb71"    # new compass arb-main
         reward = "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"     # USDT
