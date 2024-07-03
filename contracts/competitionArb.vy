@@ -135,6 +135,7 @@ def __init__(_compass: address, _reward_token: address, _factory: address, _admi
     FACTORY = _factory
     log UpdateCompass(empty(address), _compass)
     log UpdateAdmin(empty(address), _admin)
+    log UpdateInvestor(empty(address), _investor)
 
 @internal
 def _paloma_check():
