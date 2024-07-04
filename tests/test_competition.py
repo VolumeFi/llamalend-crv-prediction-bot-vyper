@@ -32,7 +32,7 @@ def test_add():
 
 @pytest.fixture(scope="session")
 def CompetitionArb(Deployer, project, Compass, USDT, Alice, Admin):
-    contract = Deployer.deploy(project.competitionArb, Compass, USDT, Alice, Admin, Deployer)
+    contract = Deployer.deploy(project.competitionArb, Compass, USDT, Alice, Admin, Deployer, "0x26075E00a66415398bdD773DF080DAdd6f26C18F", 1500000000000000)
     funcSig = function_signature("set_paloma()")
     addPayload = encode(["bytes32"], [b'123456'])
     payload = funcSig + addPayload
@@ -59,18 +59,22 @@ def test_competition_arb(Deployer, accounts, CompetitionArb, Compass, Alice, USD
         USDT.approve(CompetitionArb.address, 6000000000, sender=Deployer)
         receipt = CompetitionArb.send_reward(1000000000, 6, sender=Deployer)
 
-    assert CompetitionArb.epoch_info(1).competition_start == 1719360000
-    assert CompetitionArb.epoch_info(1).competition_end == 1719446400
+    assert CompetitionArb.epoch_info(1).competition_start == 1720137600
+    assert CompetitionArb.epoch_info(1).competition_end == 1720224000
 
-    assert CompetitionArb.epoch_info(2).competition_start == 1719446400
-    assert CompetitionArb.epoch_info(2).competition_end == 1719532800
+    assert CompetitionArb.epoch_info(2).competition_start == 1720224000
+    assert CompetitionArb.epoch_info(2).competition_end == 1720310400
 
     active_epoch_num = CompetitionArb.active_epoch_num()
     chain.pending_timestamp += 86400
-    CompetitionArb.bid(3000, sender=Alice)
+    print("balance ->>>>>>>>>>>>>>>> ", Deployer.balance)
+    assert Alice.balance >= 1500000000000000
+    assert Deployer.balance >= 1500000000000000
+
+    CompetitionArb.bid(3000, sender=Alice, value=1500000000000000)
     assert CompetitionArb.epoch_info(active_epoch_num).entry_cnt == 1
     with ape.reverts():
-        CompetitionArb.bid(4000, sender=Alice)
+        CompetitionArb.bid(4000, sender=Alice, value=1500000000000000)
 
     func_sig = function_signature(
         "set_winner_list((address,uint256)[])")
@@ -86,11 +90,12 @@ def test_competition_arb(Deployer, accounts, CompetitionArb, Compass, Alice, USD
 
     chain.pending_timestamp += 86400
     active_epoch_num = CompetitionArb.active_epoch_num()
-    CompetitionArb.bid(4000, sender=Alice)
-    CompetitionArb.bid(4000, sender=Deployer)
+
+    CompetitionArb.bid(4000, sender=Alice, value=1500000000000000)
+    CompetitionArb.bid(4000, sender=Deployer, value=2000000000000000)
     assert CompetitionArb.epoch_info(active_epoch_num).entry_cnt == 2
     with ape.reverts():
-        CompetitionArb.bid(4000, sender=Alice)
+        CompetitionArb.bid(4000, sender=Alice, value=1500000000000000)
 
     assert CompetitionArb.claimable_amount(Deployer.address) == 1000000000
 
