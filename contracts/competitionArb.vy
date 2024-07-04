@@ -40,8 +40,8 @@ paloma: public(bytes32)
 compass: public(address)
 admin: public(address)
 investor: public(address)
-gas_fee_wallet: public(address)
-gas_fee: public(uint256)
+spam_fee_wallet: public(address)
+spam_fee: public(uint256)
 epoch_cnt: public(uint256)
 active_epoch_num: public(uint256)
 epoch_info: public(HashMap[uint256, EpochInfo])
@@ -110,13 +110,13 @@ event UpdateInvestor:
     old_investor: address
     new_investor: address
 
-event UpdateGasFeeWallet:
-    old_gas_fee_wallet: address
-    new_gas_fee_wallet: address
+event UpdateSpamFeeWallet:
+    old_spam_fee_wallet: address
+    new_spam_fee_wallet: address
 
-event UpdateGasFee:
-    old_gas_fee: uint256
-    new_gas_fee: uint256
+event UpdateSpamFee:
+    old_spam_fee: uint256
+    new_spam_fee: uint256
 
 event SetWinner:
     epoch_id: uint256
@@ -136,20 +136,20 @@ event EmergencyWithdraw:
     amount: uint256
 
 @external
-def __init__(_compass: address, _reward_token: address, _factory: address, _admin: address, _investor: address, _gas_fee_wallet: address, _gas_fee: uint256):
+def __init__(_compass: address, _reward_token: address, _factory: address, _admin: address, _investor: address, _spam_fee_wallet: address, _spam_fee: uint256):
     self.compass = _compass
     self.admin = _admin
     self.investor = _investor
-    self.gas_fee_wallet = _gas_fee_wallet
-    self.gas_fee = _gas_fee
+    self.spam_fee_wallet = _spam_fee_wallet
+    self.spam_fee = _spam_fee
     REWARD_TOKEN = _reward_token
     DECIMALS = convert(ERC20(_reward_token).decimals(), uint256)
     FACTORY = _factory
     log UpdateCompass(empty(address), _compass)
     log UpdateAdmin(empty(address), _admin)
     log UpdateInvestor(empty(address), _investor)
-    log UpdateGasFeeWallet(empty(address), _gas_fee_wallet)
-    log UpdateGasFee(empty(uint256), _gas_fee)
+    log UpdateSpamFeeWallet(empty(address), _spam_fee_wallet)
+    log UpdateSpamFee(empty(uint256), _spam_fee)
 
 @internal
 def _paloma_check():
@@ -183,18 +183,18 @@ def update_investor(_new_investor: address):
     log UpdateInvestor(msg.sender, _new_investor)
 
 @external
-def update_gas_fee_wallet(_new_gas_fee_wallet: address):
+def update_spam_fee_wallet(_new_spam_fee_wallet: address):
     self._paloma_check()
-    _old_gas_fee_wallet: address = self.gas_fee_wallet
-    self.gas_fee_wallet = _new_gas_fee_wallet
-    log UpdateGasFeeWallet(_old_gas_fee_wallet, _new_gas_fee_wallet)
+    _old_spam_fee_wallet: address = self.spam_fee_wallet
+    self.spam_fee_wallet = _new_spam_fee_wallet
+    log UpdateSpamFeeWallet(_old_spam_fee_wallet, _new_spam_fee_wallet)
 
 @external
-def update_gas_fee(_new_gas_fee: uint256):
+def update_spam_fee(_new_spam_fee: uint256):
     self._paloma_check()
-    _old_gas_fee: uint256 = self.gas_fee
-    self.gas_fee = _new_gas_fee
-    log UpdateGasFee(_old_gas_fee, _new_gas_fee)
+    _old_spam_fee: uint256 = self.spam_fee
+    self.spam_fee = _new_spam_fee
+    log UpdateSpamFee(_old_spam_fee, _new_spam_fee)
 
 @external
 def set_paloma():
@@ -210,6 +210,33 @@ def emergency_withdraw(_amount: uint256):
     assert ERC20(REWARD_TOKEN).transfer(_admin, _amount, default_return_value=True), "Emergency withdraw Failed"
     log EmergencyWithdraw(_admin, _amount) 
 
+@external
+def send_reward_with_specs(_daily_amount: uint256, _competition_start: uint256, _competition_end: uint256):
+    self._investor_check()
+    assert _daily_amount > 0, "Invalid Fund Amount"
+    assert _competition_start > 0, "Invalid start timestamp"
+    assert _competition_end > _competition_start, "Invalid end timestamp"
+
+    # Transfer reward token to the contract
+    assert ERC20(REWARD_TOKEN).transferFrom(msg.sender, self, _daily_amount, default_return_value=True), "Send Reward Failed"
+    _epoch_cnt: uint256 = self.epoch_cnt
+    
+    if _epoch_cnt == 0:
+        self.active_epoch_num = unsafe_add(self.active_epoch_num, 1)
+    _epoch_cnt = unsafe_add(_epoch_cnt, 1)
+
+    _current_prize_amount: uint256 = self.epoch_info[_epoch_cnt].prize_amount
+    self.epoch_info[_epoch_cnt] = EpochInfo({
+        competition_start: _competition_start,
+        competition_end: _competition_end,
+        entry_cnt: 0,
+        prize_amount: _current_prize_amount + _daily_amount
+    })
+
+    # Event Log
+    log RewardSent(_epoch_cnt, msg.sender, REWARD_TOKEN, _daily_amount, _competition_start, _competition_end)
+    self.epoch_cnt = _epoch_cnt
+    
 @external
 def send_reward(_daily_amount: uint256, _days: uint256):
     self._investor_check()
@@ -257,12 +284,12 @@ def send_reward(_daily_amount: uint256, _days: uint256):
             log RewardSent(_epoch_cnt, msg.sender, REWARD_TOKEN, _daily_amount, _competition_start, _competition_end)
 
     self.epoch_cnt = _epoch_cnt
-
+    
 @external
 @payable
-@nonreentrant('lock')
+@nonreentrant("lock")
 def bid(_price_prediction_val: uint256):
-    _gas_fee: uint256 = self.gas_fee
+    _spam_fee: uint256 = self.spam_fee
     _value: uint256 = msg.value
     _active_epoch_num: uint256 = self.active_epoch_num
     _epoch_info: EpochInfo = self.epoch_info[_active_epoch_num]
@@ -273,11 +300,11 @@ def bid(_price_prediction_val: uint256):
     assert self.latest_bid[msg.sender] < _active_epoch_num, "Already bid"
     assert _price_prediction_val > 0, "Shouldn't be zero"
 
-    if _value > _gas_fee:
-        send(msg.sender, unsafe_sub(_value, _gas_fee))
+    if _value > _spam_fee:
+        send(msg.sender, unsafe_sub(_value, _spam_fee))
     else:
-        assert _value == _gas_fee, "Insufficient Gas Fee"
-    send(self.gas_fee_wallet, _gas_fee)
+        assert _value == _spam_fee, "Insufficient Spam Fee"
+    send(self.spam_fee_wallet, _spam_fee)
 
     _epoch_info.entry_cnt = unsafe_add(_epoch_info.entry_cnt, 1)
     #Write
