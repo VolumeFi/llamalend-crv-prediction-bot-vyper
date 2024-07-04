@@ -40,8 +40,8 @@ paloma: public(bytes32)
 compass: public(address)
 admin: public(address)
 investor: public(address)
-play_fee_wallet: public(address)
-play_fee: public(uint256)
+gas_fee_wallet: public(address)
+gas_fee: public(uint256)
 epoch_cnt: public(uint256)
 active_epoch_num: public(uint256)
 epoch_info: public(HashMap[uint256, EpochInfo])
@@ -110,13 +110,13 @@ event UpdateInvestor:
     old_investor: address
     new_investor: address
 
-event UpdatePlayFeeWallet:
-    old_play_fee_wallet: address
-    new_play_fee_wallet: address
+event UpdateGasFeeWallet:
+    old_gas_fee_wallet: address
+    new_gas_fee_wallet: address
 
-event UpdatePlayFee:
-    old_play_fee: uint256
-    new_play_fee: uint256
+event UpdateGasFee:
+    old_gas_fee: uint256
+    new_gas_fee: uint256
 
 event SetWinner:
     epoch_id: uint256
@@ -136,20 +136,20 @@ event EmergencyWithdraw:
     amount: uint256
 
 @external
-def __init__(_compass: address, _reward_token: address, _factory: address, _admin: address, _investor: address, _play_fee_wallet: address, _play_fee: uint256):
+def __init__(_compass: address, _reward_token: address, _factory: address, _admin: address, _investor: address, _gas_fee_wallet: address, _gas_fee: uint256):
     self.compass = _compass
     self.admin = _admin
     self.investor = _investor
-    self.play_fee_wallet = _play_fee_wallet
-    self.play_fee = _play_fee
+    self.gas_fee_wallet = _gas_fee_wallet
+    self.gas_fee = _gas_fee
     REWARD_TOKEN = _reward_token
     DECIMALS = convert(ERC20(_reward_token).decimals(), uint256)
     FACTORY = _factory
     log UpdateCompass(empty(address), _compass)
     log UpdateAdmin(empty(address), _admin)
     log UpdateInvestor(empty(address), _investor)
-    log UpdatePlayFeeWallet(empty(address), _play_fee_wallet)
-    log UpdatePlayFee(empty(uint256), _play_fee)
+    log UpdateGasFeeWallet(empty(address), _gas_fee_wallet)
+    log UpdateGasFee(empty(uint256), _gas_fee)
 
 @internal
 def _paloma_check():
@@ -183,18 +183,18 @@ def update_investor(_new_investor: address):
     log UpdateInvestor(msg.sender, _new_investor)
 
 @external
-def update_play_fee_wallet(_new_play_fee_wallet: address):
+def update_gas_fee_wallet(_new_gas_fee_wallet: address):
     self._paloma_check()
-    _old_play_fee_wallet: address = self.play_fee_wallet
-    self.play_fee_wallet = _new_play_fee_wallet
-    log UpdatePlayFeeWallet(_old_play_fee_wallet, _new_play_fee_wallet)
+    _old_gas_fee_wallet: address = self.gas_fee_wallet
+    self.gas_fee_wallet = _new_gas_fee_wallet
+    log UpdateGasFeeWallet(_old_gas_fee_wallet, _new_gas_fee_wallet)
 
 @external
-def update_play_fee(_new_play_fee: uint256):
+def update_gas_fee(_new_gas_fee: uint256):
     self._paloma_check()
-    _old_play_fee: uint256 = self.play_fee
-    self.play_fee = _new_play_fee
-    log UpdatePlayFee(_old_play_fee, _new_play_fee)
+    _old_gas_fee: uint256 = self.gas_fee
+    self.gas_fee = _new_gas_fee
+    log UpdateGasFee(_old_gas_fee, _new_gas_fee)
 
 @external
 def set_paloma():
@@ -262,7 +262,7 @@ def send_reward(_daily_amount: uint256, _days: uint256):
 @payable
 @nonreentrant('lock')
 def bid(_price_prediction_val: uint256):
-    _play_fee: uint256 = self.play_fee
+    _gas_fee: uint256 = self.gas_fee
     _value: uint256 = msg.value
     _active_epoch_num: uint256 = self.active_epoch_num
     _epoch_info: EpochInfo = self.epoch_info[_active_epoch_num]
@@ -273,11 +273,11 @@ def bid(_price_prediction_val: uint256):
     assert self.latest_bid[msg.sender] < _active_epoch_num, "Already bid"
     assert _price_prediction_val > 0, "Shouldn't be zero"
 
-    if _value > _play_fee:
-        send(msg.sender, unsafe_sub(_value, _play_fee))
+    if _value > _gas_fee:
+        send(msg.sender, unsafe_sub(_value, _gas_fee))
     else:
-        assert _value == _play_fee, "Insufficient Play Fee"
-    send(self.play_fee_wallet, _play_fee)
+        assert _value == _gas_fee, "Insufficient Gas Fee"
+    send(self.gas_fee_wallet, _gas_fee)
 
     _epoch_info.entry_cnt = unsafe_add(_epoch_info.entry_cnt, 1)
     #Write
